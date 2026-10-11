@@ -46,6 +46,19 @@ erDiagram
 3. Pastikan Node.js 18 atau lebih baru tersedia, lalu jalankan `node backend/app.js` dari folder proyek.
 4. Buka `http://localhost:3000`.
 
+## Mempublikasikan aplikasi untuk penilaian
+
+GitHub Pages hanya dapat menjalankan frontend statis, bukan server Node.js. Workflow di `.github/workflows/deploy-pages.yml` menerbitkan isi `frontend` sebagai GitHub Pages, sedangkan `render.yaml` menyiapkan backend Node.js untuk Render. Jangan mengunggah service-role key ke GitHub.
+
+1. Unggah/push proyek ini ke repository GitHub.
+2. Di Render, buat Web Service baru dari repository ini dan gunakan blueprint `render.yaml`. Isi `SUPABASE_URL` serta `SUPABASE_SERVICE_ROLE_KEY` pada Environment service Render. Untuk `APP_ORIGINS`, masukkan origin Pages Anda saja, misalnya `https://username.github.io` (tanpa nama repository dan tanpa garis miring di akhir). Simpan lalu tunggu backend berstatus **Live**.
+3. Salin URL backend HTTPS Render, misalnya `https://rodakas-api.onrender.com`.
+4. Di repository GitHub, buka **Settings → Secrets and variables → Actions → Variables**, lalu buat repository variable bernama `API_BASE_URL` dengan URL backend tersebut.
+5. Di **Settings → Pages**, pilih **GitHub Actions** sebagai Build and deployment source. Jalankan workflow **Deploy frontend to GitHub Pages** dari tab **Actions** (workflow juga berjalan otomatis saat file frontend berubah dan di-push).
+6. Tunggu workflow sukses, lalu bagikan URL Pages berbentuk `https://username.github.io/nama-repository/`. Uji halaman Ringkasan dan pastikan data berhasil dimuat.
+
+**Peringatan akses publik:** backend ini tidak memiliki login. Siapa pun dapat memanggil API untuk menambah, mengubah, atau menghapus data di project Supabase yang dikonfigurasi. `APP_ORIGINS` hanya membatasi akses browser lintas-origin, bukan autentikasi—orang tetap dapat mengakses API dengan alat lain. Pakai project Supabase demo yang terpisah dan jangan gunakan database berisi data sensitif. Simpan service-role key hanya di Environment Render; jangan masukkan ke workflow, frontend, atau repository.
+
 Contoh pengaturan variabel di PowerShell:
 
 ```powershell

@@ -393,3 +393,32 @@ grant execute on function public.delete_transaction(uuid) to service_role;
 grant usage on schema public to service_role;
 grant select, insert, update, delete on public.parties, public.spare_parts to service_role;
 grant select, insert, update, delete on public.transactions, public.transaction_items to service_role;
+
+revoke all on public.parties, public.spare_parts, public.transactions, public.transaction_items
+  from anon, authenticated;
+grant usage on schema public to anon;
+grant select on public.parties, public.spare_parts, public.transactions, public.transaction_items to anon;
+grant insert (name, party_type, phone), update (name, party_type, phone), delete
+  on public.parties to anon;
+grant insert (sku, name, category, selling_price),
+      update (sku, name, category, selling_price), delete
+  on public.spare_parts to anon;
+
+drop policy if exists rodakas_public_read_parties on public.parties;
+create policy rodakas_public_read_parties on public.parties for select to anon using (true);
+drop policy if exists rodakas_public_write_parties on public.parties;
+create policy rodakas_public_write_parties on public.parties for all to anon using (true) with check (true);
+
+drop policy if exists rodakas_public_read_spare_parts on public.spare_parts;
+create policy rodakas_public_read_spare_parts on public.spare_parts for select to anon using (true);
+drop policy if exists rodakas_public_write_spare_parts on public.spare_parts;
+create policy rodakas_public_write_spare_parts on public.spare_parts for all to anon using (true) with check (true);
+
+drop policy if exists rodakas_public_read_transactions on public.transactions;
+create policy rodakas_public_read_transactions on public.transactions for select to anon using (true);
+drop policy if exists rodakas_public_read_transaction_items on public.transaction_items;
+create policy rodakas_public_read_transaction_items on public.transaction_items for select to anon using (true);
+
+grant execute on function public.create_transaction(text, uuid, date, text, jsonb) to anon;
+grant execute on function public.update_transaction(uuid, text, uuid, date, text, jsonb) to anon;
+grant execute on function public.delete_transaction(uuid) to anon;

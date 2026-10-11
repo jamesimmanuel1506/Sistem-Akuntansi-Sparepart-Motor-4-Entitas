@@ -41,6 +41,11 @@ button { cursor: pointer; }
 h1, h2, p { margin-top: 0; }
 h1 { margin-bottom: 0; font: 800 22px Manrope, sans-serif; letter-spacing: -.6px; }
 .topbar-date { display: flex; align-items: center; gap: 8px; color: #778395; font-size: 12px; }
+.topbar-tools { display: flex; align-items: center; gap: 12px; }
+.connection-button { white-space: nowrap; }
+.connection-help { margin: -8px 0 18px; color: #718078; font-size: 12px; line-height: 1.6; }
+.connection-dialog textarea { width: 100%; padding: 11px 12px; border: 1px solid #dce5df; border-radius: 9px; color: #233c35; font: 12px/1.5 monospace; resize: vertical; }
+.connection-dialog #clear-supabase-config { margin-right: auto; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #25a777; box-shadow: 0 0 0 3px #e3f5ec; }
 .view { display: none; padding-top: 28px; }
 .view.active { display: block; }
@@ -137,6 +142,8 @@ td small { display: block; margin-top: 3px; color: #9da6b2; font-size: 9px; }
   .topbar { min-height: 75px; }
   h1 { font-size: 19px; }
   .topbar-date { font-size: 10px; }
+  .topbar-tools { gap: 6px; }
+  .connection-button { padding: 7px 9px; font-size: 10px; }
   .view { padding-top: 21px; }
   .welcome-row { align-items: flex-start; flex-direction: column; }
   .welcome-row .button { align-self: stretch; }
@@ -383,6 +390,7 @@ td small { color: #8d9c9a; }
   .main-content { padding: 0 15px; }
   .topbar { min-height: 72px; }
   .topbar-date { padding: 7px 9px; font-size: 9px; }
+  .topbar-tools { flex-wrap: wrap; justify-content: flex-end; }
   .view { padding-top: 20px; }
   .welcome-row { min-height: 0; padding: 19px; border-radius: 14px; }
   .welcome-row h2 { font-size: 18px; }

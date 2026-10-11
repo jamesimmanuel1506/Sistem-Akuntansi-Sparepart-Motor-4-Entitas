@@ -13,7 +13,17 @@ const dateFormat = new Intl.DateTimeFormat('id-ID', {
 });
 
 const byId = (id) => document.getElementById(id);
-const API_BASE = (window.RODAKAS_API_BASE || '').replace(/\/+$/, '');
+function readSavedSupabaseConfig() {
+  try {
+    return JSON.parse(localStorage.getItem('rodakas-supabase-config') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+const savedSupabaseConfig = readSavedSupabaseConfig();
+let SUPABASE_URL = (window.RODAKAS_SUPABASE_URL || savedSupabaseConfig.url || '').replace(/\/+$/, '');
+let SUPABASE_ANON_KEY = window.RODAKAS_SUPABASE_ANON_KEY || savedSupabaseConfig.anonKey || '';
 
 function showNotice(message, isError = false) {
   const notice = byId('notice');
@@ -24,19 +34,175 @@ function showNotice(message, isError = false) {
   showNotice.timeout = window.setTimeout(() => { notice.hidden = true; }, 5000);
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error('Endpoint belum tersedia pada backend yang sedang berjalan. Hentikan server lama, jalankan kembali node backend\\app.js, lalu muat ulang halaman.');
-    }
-    throw new Error(payload.error || `Permintaan gagal (${response.status}).`);
+async function supabase(resource, options = {}) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Hubungkan Supabase dengan Project URL dan anon/publishable key. Jangan gunakan service-role key.');
   }
-  return payload;
+  let response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/rest/v1/${resource}`, {
+      ...options,
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+  } catch (cause) {
+    throw new Error(`Tidak dapat terhubung ke Supabase. Periksa URL project dan koneksi internet. ${cause.message}`);
+  }
+  const text = await response.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!response.ok) {
+    const message = data && typeof data === 'object' ? data.message || data.details || data.hint : '';
+    if (data?.code === '23503') {
+      throw new Error('Data tidak dapat dihapus karena sudah digunakan dalam transaksi. Riwayat transaksi tetap dipertahankan.');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`${message || 'Supabase menolak akses.'} Pastikan anon key benar dan jalankan backend/schema.sql terbaru untuk memberi izin kepada role anon.`);
+    }
+    throw new Error(message || `Permintaan database gagal (${response.status}).`);
+  }
+  return data;
+}
+
+async function fetchAllPages(resource, pageSize = 1000) {
+  const rows = [];
+  const separator = resource.includes('?') ? '&' : '?';
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await supabase(`${resource}${separator}limit=${pageSize}&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+function sumTransactions(transactions) {
+  return transactions.reduce((totals, transaction) => {
+    if (transaction.transaction_type === 'sale') {
+      totals.sales += Number(transaction.total_amount);
+      totals.gross_profit += (transaction.transaction_items || []).reduce((sum, item) =>
+        sum + (Number(item.unit_price) - Number(item.unit_cost)) * Number(item.quantity), 0);
+    } else {
+      totals.purchases += Number(transaction.total_amount);
+    }
+    return totals;
+  }, { sales: 0, purchases: 0, gross_profit: 0 });
+}
+
+function validDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+async function api(path, options = {}) {
+  const method = options.method || 'GET';
+  const body = options.body ? JSON.parse(options.body) : null;
+  if (method === 'GET' && path === '/api/products') {
+    return fetchAllPages('spare_parts?select=id,sku,name,category,stock,cost_price,selling_price,is_active,created_at&is_active=eq.true&order=name.asc');
+  }
+  if (method === 'GET' && path === '/api/parties') {
+    return fetchAllPages('parties?select=id,name,party_type,phone,created_at&order=name.asc');
+  }
+  if (method === 'GET' && path === '/api/transactions') {
+    return supabase('transactions?select=id,transaction_type,transaction_date,total_amount,notes,party_id,parties(name),transaction_items(id,spare_part_id,line_number,quantity,unit_price,unit_cost,spare_parts(name,sku))&order=transaction_date.desc,created_at.desc&transaction_items.order=line_number.asc&limit=100');
+  }
+  if (method === 'GET' && path === '/api/dashboard') {
+    const [products, transactions] = await Promise.all([
+      fetchAllPages('spare_parts?select=stock&is_active=eq.true'),
+      fetchAllPages('transactions?select=transaction_type,total_amount,transaction_items(quantity,unit_price,unit_cost)'),
+    ]);
+    return {
+      ...sumTransactions(transactions),
+      product_count: products.length,
+      low_stock_count: products.filter((product) => Number(product.stock) <= 5).length,
+    };
+  }
+  if (method === 'GET' && path.startsWith('/api/reports?')) {
+    const params = new URLSearchParams(path.split('?')[1]);
+    const from = params.get('from');
+    const to = params.get('to');
+    if (!validDate(from) || !validDate(to)) {
+      throw new Error('Pilih tanggal awal dan akhir laporan yang valid.');
+    }
+    if (from > to) throw new Error('Tanggal awal tidak boleh melewati tanggal akhir.');
+    const transactions = await fetchAllPages(
+      `transactions?select=id,transaction_type,transaction_date,total_amount,notes,parties(name),transaction_items(quantity,unit_price,unit_cost,spare_parts(name,sku))&transaction_date=gte.${from}&transaction_date=lte.${to}&order=transaction_date.desc,created_at.desc,id.asc`,
+    );
+    return { from, to, transaction_count: transactions.length, ...sumTransactions(transactions), transactions };
+  }
+  if (method === 'POST' && path === '/api/products') {
+    const created = await supabase('spare_parts', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    return created[0];
+  }
+  if (method === 'POST' && path === '/api/parties') {
+    const created = await supabase('parties', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    return created[0];
+  }
+  if (method === 'POST' && path === '/api/transactions') {
+    return supabase('rpc/create_transaction', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_transaction_type: body.transaction_type,
+        p_party_id: body.party_id,
+        p_transaction_date: body.transaction_date,
+        p_notes: body.notes || null,
+        p_items: body.items,
+      }),
+    });
+  }
+
+  const match = path.match(/^\/api\/(products|parties|transactions)\/([^/?]+)(?:\?.*)?$/);
+  if (match && ['PATCH', 'DELETE'].includes(method)) {
+    const [, entity, id] = match;
+    if (entity === 'transactions') {
+      const transactionId = decodeURIComponent(id);
+      if (method === 'DELETE') {
+        return supabase('rpc/delete_transaction', {
+          method: 'POST',
+          body: JSON.stringify({ p_transaction_id: transactionId }),
+        });
+      }
+      return supabase('rpc/update_transaction', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_transaction_id: transactionId,
+          p_transaction_type: body.transaction_type,
+          p_party_id: body.party_id,
+          p_transaction_date: body.transaction_date,
+          p_notes: body.notes || null,
+          p_items: body.items,
+        }),
+      });
+    }
+    const table = entity === 'products' ? 'spare_parts' : 'parties';
+    const resource = `${table}?id=eq.${encodeURIComponent(decodeURIComponent(id))}`;
+    const response = await supabase(resource, method === 'DELETE' ? {
+      method: 'DELETE',
+      headers: { Prefer: 'return=representation' },
+    } : {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    if (!response.length) throw new Error('Data tidak ditemukan atau sudah dihapus.');
+    return method === 'DELETE' ? { id: decodeURIComponent(id) } : response[0];
+  }
+  throw new Error('Permintaan tidak dikenali.');
 }
 
 function formatDate(date) {
@@ -399,6 +565,78 @@ document.querySelectorAll('[data-go]').forEach((button) => {
   button.addEventListener('click', () => switchView(button.dataset.go));
 });
 byId('transaction-type').addEventListener('change', renderPartyOptions);
+byId('open-supabase-config').addEventListener('click', () => {
+  byId('supabase-config-error').hidden = true;
+  byId('supabase-project-url').value = SUPABASE_URL;
+  byId('supabase-anon-key').value = SUPABASE_ANON_KEY;
+  byId('supabase-config-dialog').showModal();
+});
+byId('close-supabase-config').addEventListener('click', () => byId('supabase-config-dialog').close());
+byId('supabase-config-dialog').addEventListener('click', (event) => {
+  if (event.target === byId('supabase-config-dialog')) byId('supabase-config-dialog').close();
+});
+byId('clear-supabase-config').addEventListener('click', () => {
+  SUPABASE_URL = '';
+  SUPABASE_ANON_KEY = '';
+  try {
+    localStorage.removeItem('rodakas-supabase-config');
+  } catch {
+    showNotice('Konfigurasi dihapus dari aplikasi. Penyimpanan browser tidak tersedia untuk halaman file lokal.', true);
+  }
+  byId('supabase-project-url').value = '';
+  byId('supabase-anon-key').value = '';
+  byId('supabase-config-dialog').close();
+  byId('loading').hidden = true;
+  showNotice('Konfigurasi Supabase dihapus. Hubungkan kembali untuk memuat data.', true);
+});
+byId('supabase-config-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const errorBox = byId('supabase-config-error');
+  const submit = event.currentTarget.querySelector('[type="submit"]');
+  const urlValue = byId('supabase-project-url').value.trim().replace(/\/+$/, '');
+  const keyValue = byId('supabase-anon-key').value.trim();
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(urlValue);
+  } catch {
+    errorBox.textContent = 'Project URL tidak valid.';
+    errorBox.hidden = false;
+    return;
+  }
+  if (parsedUrl.protocol !== 'https:') {
+    errorBox.textContent = 'Project URL harus menggunakan HTTPS.';
+    errorBox.hidden = false;
+    return;
+  }
+  if (!keyValue || /^sb_secret_/i.test(keyValue)) {
+    errorBox.textContent = 'Masukkan anon/public/publishable key. Service-role atau secret key tidak boleh digunakan di browser.';
+    errorBox.hidden = false;
+    return;
+  }
+  SUPABASE_URL = urlValue;
+  SUPABASE_ANON_KEY = keyValue;
+  try {
+    localStorage.setItem('rodakas-supabase-config', JSON.stringify({ url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }));
+  } catch {
+    showNotice('Pengaturan tersimpan sementara di tab ini saja karena browser tidak mengizinkan penyimpanan untuk file lokal.');
+  }
+  submit.disabled = true;
+  errorBox.hidden = true;
+  byId('loading').textContent = 'Menghubungkan ke database...';
+  byId('loading').hidden = false;
+  try {
+    await refreshData();
+    byId('supabase-config-dialog').close();
+    byId('loading').hidden = true;
+    showNotice('Berhasil terhubung ke Supabase.');
+  } catch (error) {
+    errorBox.textContent = error.message;
+    errorBox.hidden = false;
+    byId('loading').hidden = true;
+  } finally {
+    submit.disabled = false;
+  }
+});
 byId('report-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const submit = event.currentTarget.querySelector('[type="submit"]');
@@ -556,6 +794,14 @@ byId('transaction-items').append(itemRow());
 refreshData()
   .then(() => { byId('loading').hidden = true; })
   .catch((error) => {
-    byId('loading').textContent = 'Data gagal dimuat. Pastikan konfigurasi Supabase dan schema database sudah tersedia.';
-    showNotice(error.message, true);
+    byId('loading').hidden = true;
+    byId('supabase-project-url').value = SUPABASE_URL;
+    byId('supabase-anon-key').value = SUPABASE_ANON_KEY;
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      byId('supabase-config-error').textContent = error.message;
+      byId('supabase-config-error').hidden = false;
+      byId('supabase-config-dialog').showModal();
+    } else {
+      showNotice(error.message, true);
+    }
   });

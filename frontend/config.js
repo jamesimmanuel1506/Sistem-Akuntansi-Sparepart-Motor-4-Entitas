@@ -1,1 +1,2 @@
-window.RODAKAS_API_BASE = '';
+window.RODAKAS_SUPABASE_URL = '';
+window.RODAKAS_SUPABASE_ANON_KEY = '';

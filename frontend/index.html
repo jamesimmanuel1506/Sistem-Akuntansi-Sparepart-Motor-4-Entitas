@@ -38,7 +38,10 @@
             <p class="eyebrow">SISTEM AKUNTANSI</p>
             <h1 id="page-title">Ringkasan</h1>
           </div>
-          <div class="topbar-date"><span class="status-dot"></span><span id="today-label"></span></div>
+          <div class="topbar-tools">
+            <button class="button button-quiet connection-button" id="open-supabase-config" type="button">Koneksi database</button>
+            <div class="topbar-date"><span class="status-dot"></span><span id="today-label"></span></div>
+          </div>
         </header>
 
         <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -212,6 +215,29 @@
         <div class="edit-dialog-actions">
           <button class="button button-quiet" id="cancel-edit" type="button">Batal</button>
           <button class="button button-primary" type="submit">Simpan perubahan</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="edit-dialog connection-dialog" id="supabase-config-dialog" aria-labelledby="supabase-config-title">
+      <form id="supabase-config-form">
+        <div class="edit-dialog-heading">
+          <div><p class="eyebrow">PENGATURAN APLIKASI</p><h2 id="supabase-config-title">Hubungkan ke Supabase</h2></div>
+          <button class="dialog-close" id="close-supabase-config" type="button" aria-label="Tutup">×</button>
+        </div>
+        <p class="connection-help">Masukkan Project URL dan anon/public/publishable key dari Supabase → Project Settings → API. Pengaturan disimpan hanya di browser ini.</p>
+        <div class="edit-fields">
+          <label>Project URL
+            <input id="supabase-project-url" type="url" placeholder="https://project-id.supabase.co" autocomplete="url" required>
+          </label>
+          <label>Anon / publishable key
+            <textarea id="supabase-anon-key" rows="3" placeholder="sb_publishable_... atau eyJ..." autocomplete="off" required></textarea>
+          </label>
+        </div>
+        <div class="dialog-error" id="supabase-config-error" role="alert" hidden></div>
+        <p class="edit-help">Jangan masukkan service-role key. Untuk akses langsung tanpa login, pastikan izin publik pada backend/schema.sql sudah diterapkan.</p>
+        <div class="edit-dialog-actions">
+          <button class="button button-quiet" id="clear-supabase-config" type="button">Hapus konfigurasi</button>
+          <button class="button button-primary" type="submit">Simpan &amp; hubungkan</button>
         </div>
       </form>
     </dialog>

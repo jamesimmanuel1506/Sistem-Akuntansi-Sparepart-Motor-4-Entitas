@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7fb">
+    <title>RodaKas — Akuntansi Sparepart</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="config.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="RodaKas beranda">
+          <span class="brand-mark">R</span>
+          <span><strong>RodaKas</strong><small>SPAREPART MOTOR</small></span>
+        </a>
+        <p class="nav-label">MENU UTAMA</p>
+        <nav class="navigation" aria-label="Navigasi utama">
+          <button class="nav-item active" data-view="dashboard"><span>▦</span> Ringkasan</button>
+          <button class="nav-item" data-view="inventory"><span>▤</span> Persediaan</button>
+          <button class="nav-item" data-view="transactions"><span>↔</span> Transaksi</button>
+          <button class="nav-item" data-view="reports"><span>▥</span> Laporan</button>
+          <button class="nav-item" data-view="parties"><span>♙</span> Pelanggan & pemasok</button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="note-icon">✓</span>
+          <strong>Pencatatan lebih rapi</strong>
+          <p>Kelola stok, pembelian, dan penjualan dari satu tempat.</p>
+        </div>
+        <div class="sidebar-footer">Sistem Akuntansi Sederhana<br><span>Untuk usaha sparepart motor</span></div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">SISTEM AKUNTANSI</p>
+            <h1 id="page-title">Ringkasan</h1>
+          </div>
+          <div class="topbar-date"><span class="status-dot"></span><span id="today-label"></span></div>
+        </header>
+
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <div id="loading" class="loading">Menghubungkan ke database...</div>
+
+        <section class="view active" id="view-dashboard">
+          <div class="welcome-row">
+            <div>
+              <h2>Selamat datang 👋</h2>
+              <p>Pantau kondisi usaha dan catat transaksi hari ini.</p>
+            </div>
+            <button class="button button-primary" data-go="transactions">＋ Catat transaksi</button>
+          </div>
+          <div class="stats-grid">
+            <article class="stat-card">
+              <div class="stat-heading"><span>Total penjualan</span><span class="stat-icon green">↗</span></div>
+              <strong id="stat-sales">Rp0</strong><small>Akumulasi seluruh transaksi</small>
+            </article>
+            <article class="stat-card">
+              <div class="stat-heading"><span>Total pembelian</span><span class="stat-icon orange">↙</span></div>
+              <strong id="stat-purchases">Rp0</strong><small>Akumulasi seluruh transaksi</small>
+            </article>
+            <article class="stat-card">
+              <div class="stat-heading"><span>Estimasi laba kotor</span><span class="stat-icon purple">◈</span></div>
+              <strong id="stat-profit">Rp0</strong><small>Penjualan dikurangi harga pokok</small>
+            </article>
+            <article class="stat-card">
+              <div class="stat-heading"><span>Jenis sparepart</span><span class="stat-icon blue">▤</span></div>
+              <strong id="stat-products">0</strong><small id="stat-low-stock">0 stok menipis</small>
+            </article>
+          </div>
+          <div class="content-grid">
+            <section class="panel transaction-panel">
+              <div class="panel-heading">
+                <div><h2>Catat transaksi</h2><p>Pembelian menambah stok, penjualan mengurangi stok.</p></div>
+              </div>
+              <form id="transaction-form">
+                <div class="form-grid">
+                  <label>Jenis transaksi
+                    <select name="transaction_type" id="transaction-type" required>
+                      <option value="sale">Penjualan</option>
+                      <option value="purchase">Pembelian</option>
+                    </select>
+                  </label>
+                  <label>Tanggal
+                    <input name="transaction_date" id="transaction-date" type="date" required>
+                  </label>
+                  <label class="full-width">Pelanggan / pemasok
+                    <select name="party_id" id="transaction-party" required></select>
+                  </label>
+                </div>
+                <div class="items-heading"><span>Barang</span><span>Jumlah & harga satuan</span></div>
+                <div id="transaction-items" class="transaction-items"></div>
+                <button type="button" class="button button-quiet add-item" id="add-item">＋ Tambah sparepart</button>
+                <label class="notes-label">Catatan <span class="optional">(opsional)</span>
+                  <input name="notes" maxlength="500" placeholder="Contoh: pembayaran tunai">
+                </label>
+                <div class="form-footer">
+                  <div class="total-preview"><span>Total transaksi</span><strong id="transaction-total">Rp0</strong></div>
+                  <button class="button button-primary" type="submit">Simpan transaksi</button>
+                </div>
+              </form>
+            </section>
+            <section class="panel recent-panel">
+              <div class="panel-heading">
+                <div><h2>Transaksi terbaru</h2><p>Aktivitas usaha terkini</p></div>
+                <button class="text-button" data-go="transactions">Lihat semua →</button>
+              </div>
+              <div id="recent-transactions" class="recent-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-inventory">
+          <div class="section-intro"><div><h2>Persediaan sparepart</h2><p>Kelola daftar barang dan pantau jumlah stok.</p></div></div>
+          <section class="panel">
+            <div class="panel-heading"><div><h2>Tambah sparepart</h2><p>Stok awal akan bertambah melalui transaksi pembelian.</p></div></div>
+            <form id="product-form" class="inline-form">
+              <label>SKU / kode<input name="sku" required maxlength="40" placeholder="OLI-001"></label>
+              <label>Nama sparepart<input name="name" required maxlength="120" placeholder="Oli mesin 1L"></label>
+              <label>Kategori<input name="category" maxlength="80" placeholder="Pelumas"></label>
+              <label>Harga jual<input name="selling_price" type="number" min="0" step="1" required placeholder="50000"></label>
+              <button class="button button-primary" type="submit">Tambah barang</button>
+            </form>
+          </section>
+          <section class="panel table-panel">
+            <div class="panel-heading"><div><h2>Daftar barang</h2><p id="inventory-count">0 jenis sparepart</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Sparepart</th><th>Kategori</th><th>Stok</th><th>Harga pokok</th><th>Harga jual</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="inventory-table"></tbody></table></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-transactions">
+          <div class="section-intro"><div><h2>Riwayat transaksi</h2><p>Catatan pembelian dan penjualan tersimpan.</p></div><button class="button button-primary" data-go="dashboard">＋ Transaksi baru</button></div>
+          <section class="panel table-panel">
+            <div class="panel-heading"><div><h2>Semua transaksi</h2><p>Urut dari yang paling baru</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Pelanggan / pemasok</th><th>Rincian</th><th>Total</th><th>Aksi</th></tr></thead><tbody id="transactions-table"></tbody></table></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-reports">
+          <div class="section-intro"><div><h2>Laporan keuangan</h2><p>Ringkasan penjualan, pembelian, dan laba kotor berdasarkan periode.</p></div></div>
+          <section class="panel report-filter-panel">
+            <form id="report-form" class="report-filter">
+              <label>Dari tanggal<input id="report-from" name="from" type="date" required></label>
+              <label>Sampai tanggal<input id="report-to" name="to" type="date" required></label>
+              <button class="button button-primary" type="submit">Tampilkan laporan</button>
+              <button class="button button-quiet" id="export-report" type="button" disabled>↓ Ekspor CSV</button>
+            </form>
+          </section>
+          <div class="stats-grid report-stats">
+            <article class="stat-card"><div class="stat-heading"><span>Penjualan periode ini</span><span class="stat-icon green">↗</span></div><strong id="report-sales">Rp0</strong><small>Total transaksi penjualan</small></article>
+            <article class="stat-card"><div class="stat-heading"><span>Pembelian periode ini</span><span class="stat-icon orange">↙</span></div><strong id="report-purchases">Rp0</strong><small>Total transaksi pembelian</small></article>
+            <article class="stat-card"><div class="stat-heading"><span>Estimasi laba kotor</span><span class="stat-icon purple">◈</span></div><strong id="report-profit">Rp0</strong><small>Penjualan dikurangi harga pokok</small></article>
+            <article class="stat-card"><div class="stat-heading"><span>Jumlah transaksi</span><span class="stat-icon blue">↔</span></div><strong id="report-count">0</strong><small>Dalam periode yang dipilih</small></article>
+          </div>
+          <section class="panel table-panel">
+            <div class="panel-heading"><div><h2>Rincian laporan</h2><p id="report-period-label">Pilih rentang tanggal untuk melihat laporan.</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Pelanggan / pemasok</th><th>Rincian</th><th>Total</th><th>Laba kotor</th></tr></thead><tbody id="report-table"><tr><td colspan="6" class="empty-cell">Pilih rentang tanggal, lalu tampilkan laporan.</td></tr></tbody></table></div>
+          </section>
+        </section>
+
+        <section class="view" id="view-parties">
+          <div class="section-intro"><div><h2>Pelanggan & pemasok</h2><p>Satu kontak dapat berperan sebagai pelanggan, pemasok, atau keduanya.</p></div></div>
+          <section class="panel">
+            <div class="panel-heading"><div><h2>Tambah kontak</h2><p>Simpan informasi pelanggan atau pemasok.</p></div></div>
+            <form id="party-form" class="inline-form party-form">
+              <label>Nama kontak<input name="name" required maxlength="120" placeholder="Nama pelanggan atau toko"></label>
+              <label>Peran<select name="party_type"><option value="customer">Pelanggan</option><option value="supplier">Pemasok</option><option value="both">Keduanya</option></select></label>
+              <label>Nomor telepon<input name="phone" maxlength="30" placeholder="08xxxxxxxxxx"></label>
+              <button class="button button-primary" type="submit">Tambah kontak</button>
+            </form>
+          </section>
+          <section class="panel table-panel">
+            <div class="panel-heading"><div><h2>Daftar kontak</h2><p>Kontak yang tersedia untuk transaksi</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Nama</th><th>Peran</th><th>Nomor telepon</th><th>Ditambahkan</th><th>Aksi</th></tr></thead><tbody id="parties-table"></tbody></table></div>
+          </section>
+        </section>
+        <footer class="page-footer">RodaKas · Pencatatan sederhana, usaha lebih terarah.</footer>
+      </main>
+    </div>
+    <dialog class="edit-dialog" id="edit-dialog" aria-labelledby="edit-dialog-title">
+      <form id="edit-form">
+        <div class="edit-dialog-heading">
+          <div><p class="eyebrow">UBAH DATA</p><h2 id="edit-dialog-title">Edit data</h2></div>
+          <button class="dialog-close" id="close-edit-dialog" type="button" aria-label="Tutup">×</button>
+        </div>
+        <div id="edit-product-fields" class="edit-fields" hidden>
+          <label>SKU / kode<input id="edit-product-sku" name="sku" maxlength="40" required></label>
+          <label>Nama sparepart<input id="edit-product-name" name="name" maxlength="120" required></label>
+          <label>Kategori<input id="edit-product-category" name="category" maxlength="80"></label>
+          <label>Harga jual<input id="edit-product-price" name="selling_price" type="number" min="0" step="1" required></label>
+          <p class="edit-help">Stok dan harga pokok dikelola lewat transaksi agar riwayat akuntansi tetap konsisten.</p>
+        </div>
+        <div id="edit-party-fields" class="edit-fields" hidden>
+          <label>Nama kontak<input id="edit-party-name" name="party_name" maxlength="120" required></label>
+          <label>Peran<select id="edit-party-type" name="party_type"><option value="customer">Pelanggan</option><option value="supplier">Pemasok</option><option value="both">Keduanya</option></select></label>
+          <label>Nomor telepon<input id="edit-party-phone" name="phone" maxlength="30"></label>
+        </div>
+        <div id="edit-transaction-fields" class="edit-fields" hidden>
+          <label>Jenis transaksi<select id="edit-transaction-type" name="transaction_type"><option value="sale">Penjualan</option><option value="purchase">Pembelian</option></select></label>
+          <label>Tanggal<input id="edit-transaction-date" name="transaction_date" type="date" required></label>
+          <label>Pelanggan / pemasok<select id="edit-transaction-party" name="party_id" required></select></label>
+          <div class="items-heading"><span>Barang</span><span>Jumlah & harga satuan</span></div>
+          <div id="edit-transaction-items" class="transaction-items"></div>
+          <button class="button button-quiet add-item" id="edit-add-item" type="button">＋ Tambah sparepart</button>
+          <label>Catatan <span class="optional">(opsional)</span><input id="edit-transaction-notes" name="notes" maxlength="500"></label>
+          <div class="edit-total"><span>Total transaksi</span><strong id="edit-transaction-total">Rp0</strong></div>
+          <p class="edit-help">Perubahan akan menghitung ulang stok dan harga pokok. Jika stok menjadi tidak mencukupi, perubahan ditolak.</p>
+        </div>
+        <div id="edit-form-error" class="dialog-error" role="alert" hidden></div>
+        <div class="edit-dialog-actions">
+          <button class="button button-quiet" id="cancel-edit" type="button">Batal</button>
+          <button class="button button-primary" type="submit">Simpan perubahan</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
